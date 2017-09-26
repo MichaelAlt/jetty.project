@@ -18,8 +18,10 @@
 
 package org.eclipse.jetty.util.thread;
 
+import java.security.SecureRandom;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Random;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -32,10 +34,12 @@ import org.eclipse.jetty.toolchain.test.annotation.Stress;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class ReservedThreadExecutorTest
 {
@@ -262,5 +266,74 @@ public class ReservedThreadExecutorTest
                 e.printStackTrace();
             }
         }
+    }
+
+    @Ignore
+    @Test
+    public void stressTest() throws Exception
+    {
+        QueuedThreadPool pool = new QueuedThreadPool(20);
+        pool.setStopTimeout(10000);
+        pool.start();
+        ReservedThreadExecutor reserved = new ReservedThreadExecutor(pool,10);
+        reserved.setIdleTimeout(0,null);
+        reserved.start();
+
+        final int LOOPS = 1000000;
+        final Random random = new Random();
+        final AtomicInteger executions = new AtomicInteger(LOOPS);
+        final CountDownLatch executed = new CountDownLatch(executions.get());
+        final AtomicInteger usedReserved = new AtomicInteger(0);
+        final AtomicInteger usedPool = new AtomicInteger(0);
+
+        Runnable task = new Runnable()
+        {
+            public void run()
+            {
+                try
+                {
+                    while (true)
+                    {
+                        int loops = executions.get();
+                        if (loops <= 0)
+                            return;
+
+                        if (executions.compareAndSet(loops, loops - 1))
+                        {
+                            if (reserved.tryExecute(this))
+                            {
+                                usedReserved.incrementAndGet();
+                            } else
+                            {
+                                usedPool.incrementAndGet();
+                                pool.execute(this);
+                            }
+                            return;
+                        }
+                    }
+                }
+                finally
+                {
+                    executed.countDown();
+                }
+            }
+        };
+
+        task.run();
+        task.run();
+        task.run();
+        task.run();
+        task.run();
+        task.run();
+        task.run();
+        task.run();
+
+        assertTrue(executed.await(60,TimeUnit.SECONDS));
+
+        reserved.stop();
+        pool.stop();
+
+        assertThat(usedReserved.get()+usedPool.get(),is(LOOPS));
+        System.err.printf("reserved=%d pool=%d total=%d%n",usedReserved.get(),usedPool.get(),LOOPS);
     }
 }

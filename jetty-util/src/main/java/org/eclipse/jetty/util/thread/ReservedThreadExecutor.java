@@ -270,26 +270,17 @@ public class ReservedThreadExecutor extends AbstractLifeCycle implements Executo
                         try
                         {
                             if (_idleTime == 0)
-                            {
                                 _wakeup.await();
-                                task = _task;
-                                _task = null;
-                            }
-                            else if (_wakeup.await(_idleTime, _idleTimeUnit))
-                            {
-                                task = _task;
-                                _task = null;
-                            }
                             else
-                            {
-                                idle = true;
-                            }
+                                idle = !_wakeup.await(_idleTime, _idleTimeUnit);
                         }
                         catch (InterruptedException e)
                         {
                             LOG.ignore(e);
                         }
                     }
+                    task = _task;
+                    _task = null;
                 }
 
                 if (idle)
@@ -301,7 +292,7 @@ public class ReservedThreadExecutor extends AbstractLifeCycle implements Executo
                     // recently used)
                     if (LOG.isDebugEnabled())
                         LOG.debug("{} IDLE", this);
-                    ReservedThreadExecutor.this.tryExecute(STOP);
+                    tryExecute(STOP);
                 }
             }
 
