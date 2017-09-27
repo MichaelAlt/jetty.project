@@ -73,6 +73,7 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.Scheduler;
+import org.eclipse.jetty.util.thread.ThreadBudget;
 import org.eclipse.jetty.util.thread.ThreadPool;
 
 /**
@@ -112,7 +113,7 @@ import org.eclipse.jetty.util.thread.ThreadPool;
  * </pre>
  */
 @ManagedObject("The HTTP client")
-public class HttpClient extends ContainerLifeCycle
+public class HttpClient extends ContainerLifeCycle implements ThreadBudget.Allocation
 {
     private static final Logger LOG = Log.getLogger(HttpClient.class);
 
@@ -191,6 +192,15 @@ public class HttpClient extends ContainerLifeCycle
     }
 
     @Override
+    public int getMinThreadsRequired()
+    {
+        return getContainedBeans(ThreadBudget.Allocation.class)
+            .stream()
+            .mapToInt(ThreadBudget.Allocation::getMinThreadsRequired)
+            .sum();
+    }
+
+    @Override
     protected void doStart() throws Exception
     {
         if (sslContextFactory != null)
@@ -235,6 +245,13 @@ public class HttpClient extends ContainerLifeCycle
         cookieStore = cookieManager.getCookieStore();
 
         super.doStart();
+
+        if (executor instanceof ThreadPool.SizedThreadPool)
+        {
+            ThreadBudget budget = ((ThreadPool.SizedThreadPool)executor).getThreadBudget();
+            if (budget!=null)
+                budget.register(this);
+        }
     }
 
     private CookieManager newCookieManager()
@@ -245,6 +262,13 @@ public class HttpClient extends ContainerLifeCycle
     @Override
     protected void doStop() throws Exception
     {
+        if (byteBufferPool instanceof ThreadPool.SizedThreadPool)
+        {
+            ThreadBudget budget = ((ThreadPool.SizedThreadPool)byteBufferPool).getThreadBudget();
+            if (budget!=null)
+                budget.unregister(this);
+        }
+
         decoderFactories.clear();
         handlers.clear();
 
@@ -767,6 +791,8 @@ public class HttpClient extends ContainerLifeCycle
     public void setExecutor(Executor executor)
     {
         this.executor = executor;
+        if (executor instanceof ThreadPool.SizedThreadPool)
+            ((ThreadPool.SizedThreadPool)executor).getThreadBudget(true);
     }
 
     /**

@@ -198,6 +198,7 @@ public class ContainerLifeCycle extends AbstractLifeCycle implements Container, 
      * @param bean the bean to test
      * @return whether this aggregate contains and manages the bean
      */
+    @Override
     public boolean isManaged(Object bean)
     {
         for (Bean b : _beans)

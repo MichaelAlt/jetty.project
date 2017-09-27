@@ -24,12 +24,12 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -66,6 +66,7 @@ import org.eclipse.jetty.util.log.Logger;
 import org.eclipse.jetty.util.thread.Locker;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ShutdownThread;
+import org.eclipse.jetty.util.thread.ThreadBudget;
 import org.eclipse.jetty.util.thread.ThreadPool;
 import org.eclipse.jetty.util.thread.ThreadPool.SizedThreadPool;
 
@@ -381,34 +382,14 @@ public class Server extends HandlerWrapper implements Attributes
 
         // Check that the thread pool size is enough.
         SizedThreadPool pool = getBean(SizedThreadPool.class);
-        int max=pool==null?-1:pool.getMaxThreads();
-        int selectors=0;
-        int acceptors=0;
-
-        for (Connector connector : _connectors)
+        if (pool!=null)
         {
-            if (connector instanceof AbstractConnector)
-            {
-                AbstractConnector abstractConnector = (AbstractConnector)connector;
-                Executor connectorExecutor = connector.getExecutor();
+            ThreadBudget budget = new ThreadBudget(pool);
 
-                if (connectorExecutor != pool)
-                {
-                    // Do not count the selectors and acceptors from this connector at
-                    // the server level, because the connector uses a dedicated executor.
-                    continue;
-                }
-
-                acceptors += abstractConnector.getAcceptors();
-
-                if (connector instanceof ServerConnector)
-                    selectors += ((ServerConnector)connector).getSelectorManager().getSelectorCount();
-            }
+            Collection<ThreadBudget.Allocation> allocations = getContainedBeans(ThreadBudget.Allocation.class);
+            LOG.info("allocations {}", allocations);
+            budget.check(allocations);
         }
-
-        int needed=1+selectors+acceptors;
-        if (max>0 && needed>max)
-            throw new IllegalStateException(String.format("Insufficient threads: max=%d < needed(acceptors=%d + selectors=%d + request=1)",max,acceptors,selectors));
 
         MultiException mex=new MultiException();
         try

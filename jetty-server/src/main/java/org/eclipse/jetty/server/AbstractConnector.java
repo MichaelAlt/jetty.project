@@ -53,6 +53,7 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.Locker;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.Scheduler;
+import org.eclipse.jetty.util.thread.ThreadBudget;
 
 /**
  * <p>An abstract implementation of {@link Connector} that provides a {@link ConnectionFactory} mechanism
@@ -137,7 +138,7 @@ import org.eclipse.jetty.util.thread.Scheduler;
  * sufficient for modern persistent protocols (HTTP/1.1, HTTP/2 etc.)
  */
 @ManagedObject("Abstract implementation of the Connector Interface")
-public abstract class AbstractConnector extends ContainerLifeCycle implements Connector, Dumpable
+public abstract class AbstractConnector extends ContainerLifeCycle implements Connector, Dumpable, ThreadBudget.Allocation
 {
     protected final Logger LOG = Log.getLogger(AbstractConnector.class);
 
@@ -220,6 +221,12 @@ public abstract class AbstractConnector extends ContainerLifeCycle implements Co
     public ByteBufferPool getByteBufferPool()
     {
         return _byteBufferPool;
+    }
+
+    @Override
+    public int getMinThreadsRequired()
+    {
+        return _acceptors.length;
     }
 
     @Override

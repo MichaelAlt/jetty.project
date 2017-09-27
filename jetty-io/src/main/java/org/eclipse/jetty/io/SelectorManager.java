@@ -38,6 +38,7 @@ import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
 import org.eclipse.jetty.util.thread.ReservedThreadExecutor;
 import org.eclipse.jetty.util.thread.Scheduler;
+import org.eclipse.jetty.util.thread.ThreadBudget;
 import org.eclipse.jetty.util.thread.ThreadPool;
 import org.eclipse.jetty.util.thread.strategy.EatWhatYouKill;
 
@@ -49,7 +50,7 @@ import org.eclipse.jetty.util.thread.strategy.EatWhatYouKill;
  */
 
 @ManagedObject("Manager of the NIO Selectors")
-public abstract class SelectorManager extends ContainerLifeCycle implements Dumpable
+public abstract class SelectorManager extends ContainerLifeCycle implements Dumpable, ThreadBudget.Allocation
 {
     public static final int DEFAULT_CONNECT_TIMEOUT = 15000;
     protected static final Logger LOG = Log.getLogger(SelectorManager.class);
@@ -114,6 +115,12 @@ public abstract class SelectorManager extends ContainerLifeCycle implements Dump
     public long getConnectTimeout()
     {
         return _connectTimeout;
+    }
+
+    @Override
+    public int getMinThreadsRequired()
+    {
+        return ReservedThreadExecutor.reservedThreads(getExecutor(),getReservedThreads());
     }
 
     /**
