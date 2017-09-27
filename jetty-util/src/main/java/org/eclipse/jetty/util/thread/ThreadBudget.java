@@ -114,6 +114,12 @@ public class ThreadBudget
         return pool;
     }
 
+    public void reset()
+    {
+        allocations.clear();
+        info.clear();
+        warned.set(false);
+    }
 
     public Lease leaseTo(Object leasee, int threads)
     {

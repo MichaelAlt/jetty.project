@@ -202,6 +202,9 @@ public class QueuedThreadPool extends AbstractLifeCycle implements SizedThreadPo
             }
         }
 
+        if (_budget!=null)
+            _budget.reset();
+
         synchronized (_joinLock)
         {
             _joinLock.notifyAll();
