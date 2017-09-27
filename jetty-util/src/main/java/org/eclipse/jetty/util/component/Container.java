@@ -139,23 +139,5 @@ public interface Container
      * @return the list of beans of the given class from the entire managed hierarchy
      * @param <T> the Bean type
      */
-    public default <T> Collection<T> getContainedBeans(Class<T> clazz)
-    {
-        Set<T> beans = new HashSet<>();
-        getContainedBeans(clazz, beans);
-        return beans;
-    }
-
-    /**
-     * @param clazz the class of the beans
-     * @param <T> the Bean type
-     * @param beans the collection to add beans of the given class from the entire managed hierarchy
-     */
-    public default <T> void getContainedBeans(Class<T> clazz, Collection<T> beans)
-    {
-        beans.addAll(getBeans(clazz));
-        for (Container c : getBeans(Container.class))
-            if (isManaged(c))
-                c.getContainedBeans(clazz, beans);
-    }
+    public <T> Collection<T> getContainedBeans(Class<T> clazz);
 }

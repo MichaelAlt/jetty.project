@@ -107,36 +107,24 @@ public class QueuedThreadPool extends AbstractLifeCycle implements SizedThreadPo
         }
         _jobs=queue;
         _threadGroup=threadGroup;
+        _budget=new ThreadBudget(this);
     }
 
     @Override
     public ThreadBudget getThreadBudget()
     {
-        return getThreadBudget(false);
-    }
-
-    @Override
-    public ThreadBudget getThreadBudget(boolean create)
-    {
-        synchronized (this)
-        {
-            if (_budget==null && create)
-                _budget = new ThreadBudget(this);
-            return _budget;
-        }
+        return _budget;
     }
 
     public void setThreadBudget(ThreadBudget budget)
     {
-        if (budget.getSizedThreadPool()!=this)
+        if (budget!=null && budget.getSizedThreadPool()!=this)
             throw new IllegalArgumentException();
         synchronized (this)
         {
             _budget = budget;
         }
     }
-
-
 
     @Override
     protected void doStart() throws Exception
@@ -593,7 +581,7 @@ public class QueuedThreadPool extends AbstractLifeCycle implements SizedThreadPo
     @Override
     public String toString()
     {
-        return String.format("org.eclipse.jetty.util.thread.QueuedThreadPool@%s{%s,%d<=%d<=%d,i=%d,q=%d}", _name, getState(), getMinThreads(), getThreads(), getMaxThreads(), getIdleThreads(), (_jobs == null ? -1 : _jobs.size()));
+        return String.format("QueuedThreadPool@%s{%s,%d<=%d<=%d,i=%d,q=%d}", _name, getState(), getMinThreads(), getThreads(), getMaxThreads(), getIdleThreads(), (_jobs == null ? -1 : _jobs.size()));
     }
 
     private Runnable idleJobPoll() throws InterruptedException

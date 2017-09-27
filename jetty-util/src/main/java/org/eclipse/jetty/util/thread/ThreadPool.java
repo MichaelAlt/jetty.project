@@ -42,9 +42,6 @@ import org.eclipse.jetty.util.log.Logger;
 @ManagedObject("Pool of Threads")
 public interface ThreadPool extends Executor
 {
-    static final Logger LOG = Log.getLogger(ThreadPool.class);
-
-
     /* ------------------------------------------------------------ */
     /**
      * Blocks until the thread pool is {@link LifeCycle#stop stopped}.
@@ -85,13 +82,6 @@ public interface ThreadPool extends Executor
 
         default ThreadBudget getThreadBudget()
         {
-            return null;
-        }
-
-        default ThreadBudget getThreadBudget(boolean create)
-        {
-            if (create)
-                throw new UnsupportedOperationException();
             return null;
         }
     }

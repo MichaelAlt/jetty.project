@@ -380,17 +380,6 @@ public class Server extends HandlerWrapper implements Attributes
         
         HttpGenerator.setJettyVersion(HttpConfiguration.SERVER_VERSION);
 
-        // Check that the thread pool size is enough.
-        SizedThreadPool pool = getBean(SizedThreadPool.class);
-        if (pool!=null)
-        {
-            ThreadBudget budget = new ThreadBudget(pool);
-
-            Collection<ThreadBudget.Allocation> allocations = getContainedBeans(ThreadBudget.Allocation.class);
-            LOG.info("allocations {}", allocations);
-            budget.check(allocations);
-        }
-
         MultiException mex=new MultiException();
         try
         {

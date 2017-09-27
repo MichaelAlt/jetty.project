@@ -1,10 +1,14 @@
 package org.eclipse.jetty.util.thread;
 
-import java.util.Collection;
-import java.util.Collections;
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.stream.Stream;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.eclipse.jetty.util.log.Log;
+import org.eclipse.jetty.util.log.Logger;
 //
 //  ========================================================================
 //  Copyright (c) 1995-2017 Mort Bay Consulting Pty. Ltd.
@@ -25,27 +29,65 @@ import java.util.stream.Stream;
 
 /**
  * <p>A budget of required thread usage, used to warn or error for insufficient configured threads.</p>
- * <p>The budget is checked against {@link Allocation}s, which may be registered or unregistered.
- * Registered allocations are stateful and remember between checks. Unregistered allocations are stateless
- * and must be passed into each call to {@link #check(Collection)}</p>
  *
  * @see ThreadPool.SizedThreadPool#getThreadBudget()
  */
 public class ThreadBudget
 {
+    static final Logger LOG = Log.getLogger(ThreadBudget.class);
+
+    public interface Lease extends Closeable
+    {
+        int getThreads();
+    }
+
     /**
      * An allocation of threads
      */
-    public interface Allocation
+    public class Leased implements Lease
     {
-        /**
-         * @return The minimum number of threads required by this component to function.
-         */
-        public int getMinThreadsRequired();
+        final Object leasee;
+        final int threads;
+
+        private Leased(Object leasee,int threads)
+        {
+            this.leasee = leasee;
+            this.threads = threads;
+        }
+
+        @Override
+        public int getThreads()
+        {
+            return threads;
+        }
+
+        @Override
+        public void close()
+        {
+            info.remove(this);
+            allocations.remove(this);
+            warned.set(false);
+        }
     }
 
+    private static final Lease NOOP_LEASE = new Lease()
+    {
+        @Override
+        public void close() throws IOException
+        {
+        }
+
+        @Override
+        public int getThreads()
+        {
+            return 0;
+        }
+    };
+
     final ThreadPool.SizedThreadPool pool;
-    final Set<Allocation> allocations = new CopyOnWriteArraySet<>();
+    final Set<Leased> allocations = new CopyOnWriteArraySet<>();
+    final Set<Leased> info = new CopyOnWriteArraySet<>();
+    final AtomicBoolean warned = new AtomicBoolean();
     final int warnAt;
 
     /**
@@ -72,24 +114,13 @@ public class ThreadBudget
         return pool;
     }
 
-    /**
-     * Register an allocation and check budget.
-     * @param allocation The allocation to add.
-     */
-    public void register(Allocation allocation)
-    {
-        allocations.add(allocation);
-        check();
-    }
 
-    /**
-     * Unregister an allocation
-     * @param allocation the allocation to unregister
-     * @return true if it was registered.
-     */
-    public boolean unregister(Allocation allocation)
+    public Lease leaseTo(Object leasee, int threads)
     {
-        return allocations.remove(allocation);
+        Leased lease = new Leased(leasee,threads);
+        allocations.add(lease);
+        check();
+        return lease;
     }
 
     /**
@@ -98,38 +129,43 @@ public class ThreadBudget
      */
     public void check() throws IllegalStateException
     {
-        check(Collections.emptySet());
-    }
-
-    /**
-     * Check registered and unregistered allocations against the budget
-     * @param unregisteredAllocations The unregistered Allocations to check
-     * @throws IllegalStateException if insufficient threads are configured.
-     */
-    public void check(Collection<Allocation> unregisteredAllocations) throws IllegalStateException
-    {
-        int required = Stream.concat(allocations.stream(), unregisteredAllocations.stream())
-            .mapToInt(Allocation::getMinThreadsRequired)
+        int required = allocations.stream()
+            .mapToInt(Lease::getThreads)
             .sum();
 
         int maximum = pool.getMaxThreads();
 
         if (required>=maximum)
         {
-            infoOnConsumers(unregisteredAllocations);
+            infoOnLeases();
             throw new IllegalStateException(String.format("Insuffient configured threads: required=%d < max=%d for %s", required, maximum, pool));
         }
 
         if ((maximum-required) < warnAt)
         {
-            infoOnConsumers(unregisteredAllocations);
-            ThreadPool.LOG.warn("Low configured threads: ( max={} - required={} ) < warnAt={} for {}", maximum, required, warnAt, pool);
+            infoOnLeases();
+            if (warned.compareAndSet(false,true))
+                LOG.warn("Low configured threads: ( max={} - required={} ) < warnAt={} for {}", maximum, required, warnAt, pool);
         }
     }
 
-    private void infoOnConsumers(Collection<Allocation> unregisteredAllocations)
+    private void infoOnLeases()
     {
-        Stream.concat(unregisteredAllocations.stream(), unregisteredAllocations.stream())
-            .forEach(c->ThreadPool.LOG.info("{} requires {} threads",c,c.getMinThreadsRequired()));
+        allocations.stream().filter(lease->!info.contains(lease))
+            .forEach(lease->{
+                info.add(lease);
+                LOG.info("{} requires {} threads from {}",lease.leasee,lease.getThreads(),pool);
+            });
+    }
+
+    public static Lease leaseFrom(Executor executor, Object leasee, int threads)
+    {
+        if (executor instanceof ThreadPool.SizedThreadPool)
+        {
+            ThreadBudget budget = ((ThreadPool.SizedThreadPool)executor).getThreadBudget();
+            if (budget!=null)
+                return budget.leaseTo(leasee,threads);
+        }
+        return NOOP_LEASE;
     }
 }

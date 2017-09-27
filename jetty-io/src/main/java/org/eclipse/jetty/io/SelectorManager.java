@@ -50,7 +50,7 @@ import org.eclipse.jetty.util.thread.strategy.EatWhatYouKill;
  */
 
 @ManagedObject("Manager of the NIO Selectors")
-public abstract class SelectorManager extends ContainerLifeCycle implements Dumpable, ThreadBudget.Allocation
+public abstract class SelectorManager extends ContainerLifeCycle implements Dumpable
 {
     public static final int DEFAULT_CONNECT_TIMEOUT = 15000;
     protected static final Logger LOG = Log.getLogger(SelectorManager.class);
@@ -115,12 +115,6 @@ public abstract class SelectorManager extends ContainerLifeCycle implements Dump
     public long getConnectTimeout()
     {
         return _connectTimeout;
-    }
-
-    @Override
-    public int getMinThreadsRequired()
-    {
-        return ReservedThreadExecutor.reservedThreads(getExecutor(),getReservedThreads());
     }
 
     /**
@@ -302,13 +296,15 @@ public abstract class SelectorManager extends ContainerLifeCycle implements Dump
     @Override
     protected void doStart() throws Exception
     {
-        addBean(new ReservedThreadExecutor(getExecutor(),_reservedThreads),true);
+        addBean(new ReservedThreadExecutor(getExecutor(),_reservedThreads,this),true);
+
         for (int i = 0; i < _selectors.length; i++)
         {
             ManagedSelector selector = newSelector(i);
             _selectors[i] = selector;
             addBean(selector);
         }
+
         super.doStart();
     }
 
